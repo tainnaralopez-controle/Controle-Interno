@@ -1,0 +1,217 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: clients
+// Fields:
+//   - name: string (required)
+//   - email: string (optional, email format)
+//   - whatsapp: string (optional)
+//   - instagram: string (optional)
+//   - avatar: string (optional, url format)
+//   - tag: string (optional, enum: VIP, Ativo, Inativo)
+//   - preferences: string (optional)
+//   - notes: string (optional)
+//   - purchaseHistory: list (optional, list of order IDs)
+//   - totalSpent: number (optional)
+//   - lastPurchaseDate: string (optional, date-time format)
+//   - uid: string (required) - Owner of the record
+//
+// Collection: suppliers
+// Fields:
+//   - name: string (required)
+//   - contact: string (optional)
+//   - category: string (optional)
+//   - rating: number (optional)
+//   - googleMapsUrl: string (optional, url format)
+//   - minPurchase: number (optional)
+//   - uid: string (required)
+//
+// Collection: products
+// Fields:
+//   - description: string (required)
+//   - internalCode: string (optional)
+//   - category: string (optional)
+//   - stock: number (optional)
+//   - supplier: string (optional)
+//   - image: string (optional, url format)
+//   - cost: number (optional)
+//   - price: number (optional)
+//   - margin: number (optional)
+//   - status: string (optional)
+//   - minStock: number (optional)
+//   - uid: string (required)
+//
+// Collection: orders
+// Fields:
+//   - clientId: string (required)
+//   - productId: string (required)
+//   - totalValue: number (required)
+//   - status: string (required, enum: Aberto, Pago, Cancelado, Reservado)
+//   - createdAt: string (optional, date-time format)
+//   - uid: string (required)
+//
+// Collection: transactions
+// Fields:
+//   - date: string (required, date format)
+//   - description: string (required)
+//   - amount: number (required)
+//   - type: string (required, enum: entrada, saída)
+//   - status: string (optional, enum: pago, pendente)
+//   - uid: string (required)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "tainnaralopez@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) ||
+        request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) ||
+        request.resource.data.uid == resource.data.uid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url is string &&
+        (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidClient(data) {
+      return hasRequiredFields(['name', 'uid']) &&
+        data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+        (!('email' in data) || isValidEmail(data.email)) &&
+        (!('avatar' in data) || isValidUrl(data.avatar)) &&
+        (!('tag' in data) || data.tag in ['VIP', 'Ativo', 'Inativo']) &&
+        (!('lastPurchaseDate' in data) || isValidDateString(data.lastPurchaseDate));
+    }
+
+    function isValidSupplier(data) {
+      return hasRequiredFields(['name', 'uid']) &&
+        data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+        (!('googleMapsUrl' in data) || isValidUrl(data.googleMapsUrl));
+    }
+
+    function isValidProduct(data) {
+      return hasRequiredFields(['description', 'uid']) &&
+        data.description is string && data.description.size() > 0 && data.description.size() < 200 &&
+        (!('image' in data) || isValidUrl(data.image));
+    }
+
+    function isValidOrder(data) {
+      return hasRequiredFields(['clientId', 'productId', 'totalValue', 'status', 'uid']) &&
+        data.status in ['Aberto', 'Pago', 'Cancelado', 'Reservado'] &&
+        data.totalValue is number && data.totalValue >= 0 &&
+        (!('createdAt' in data) || isValidDateString(data.createdAt));
+    }
+
+    function isValidTransaction(data) {
+      return hasRequiredFields(['date', 'description', 'amount', 'type', 'uid']) &&
+        data.type in ['entrada', 'saída'] &&
+        data.amount is number &&
+        (!('status' in data) || data.status in ['pago', 'pendente']);
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && 
+        hasOnlyAllowedFields(['name', 'email', 'role', 'uid']) &&
+        (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isAuthenticated() && isOwner(userId) && 
+        hasOnlyAllowedFields(['name', 'email', 'role', 'uid']) &&
+        (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /clients/{clientId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && uidUnchanged() && isValidClient(request.resource.data);
+      allow update: if isAuthenticated() && isDocOwner() && uidNotModified() && isValidClient(request.resource.data);
+      allow delete: if isAuthenticated() && isDocOwner() || isAdmin();
+    }
+
+    match /suppliers/{supplierId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && uidUnchanged() && isValidSupplier(request.resource.data);
+      allow update: if isAuthenticated() && isDocOwner() && uidNotModified() && isValidSupplier(request.resource.data);
+      allow delete: if isAuthenticated() && isDocOwner() || isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && uidUnchanged() && isValidProduct(request.resource.data);
+      allow update: if isAuthenticated() && isDocOwner() && uidNotModified() && isValidProduct(request.resource.data);
+      allow delete: if isAuthenticated() && isDocOwner() || isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && uidUnchanged() && isValidOrder(request.resource.data);
+      allow update: if isAuthenticated() && isDocOwner() && uidNotModified() && isValidOrder(request.resource.data);
+      allow delete: if isAuthenticated() && isDocOwner() || isAdmin();
+    }
+
+    match /transactions/{transactionId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && uidUnchanged() && isValidTransaction(request.resource.data);
+      allow update: if isAuthenticated() && isDocOwner() && uidNotModified() && isValidTransaction(request.resource.data);
+      allow delete: if isAuthenticated() && isDocOwner() || isAdmin();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

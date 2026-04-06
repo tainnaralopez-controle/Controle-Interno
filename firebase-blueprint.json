@@ -1,0 +1,138 @@
+{
+  "entities": {
+    "Client": {
+      "title": "Client",
+      "description": "A customer of the business.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "whatsapp": { "type": "string" },
+        "instagram": { "type": "string" },
+        "avatar": { "type": "string", "format": "uri" },
+        "tag": { "type": "string", "enum": ["VIP", "Ativo", "Inativo"] },
+        "preferences": { "type": "string" },
+        "notes": { "type": "string" },
+        "purchaseHistory": { "type": "array", "items": { "type": "string" } },
+        "totalSpent": { "type": "number" },
+        "lastPurchaseDate": { "type": "string", "format": "date-time" },
+        "uid": { "type": "string", "description": "The Firebase Auth UID of the user who owns this client record." }
+      },
+      "required": ["name", "uid"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "A provider of products.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "contact": { "type": "string" },
+        "category": { "type": "string" },
+        "rating": { "type": "number" },
+        "googleMapsUrl": { "type": "string", "format": "uri" },
+        "minPurchase": { "type": "number" },
+        "uid": { "type": "string" }
+      },
+      "required": ["name", "uid"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "An item sold by the business.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "internalCode": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "stock": { "type": "number" },
+        "supplier": { "type": "string" },
+        "image": { "type": "string", "format": "uri" },
+        "cost": { "type": "number" },
+        "price": { "type": "number" },
+        "margin": { "type": "number" },
+        "status": { "type": "string" },
+        "minStock": { "type": "number" },
+        "uid": { "type": "string" }
+      },
+      "required": ["description", "uid"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A sale of a product to a client.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "productId": { "type": "string" },
+        "productDescription": { "type": "string" },
+        "totalValue": { "type": "number" },
+        "status": { "type": "string", "enum": ["Aberto", "Pago", "Cancelado", "Reservado"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "measurements": { "type": "string" },
+        "uid": { "type": "string" }
+      },
+      "required": ["clientId", "productId", "totalValue", "status", "uid"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A financial entry (income or expense).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["entrada", "saída"] },
+        "category": { "type": "string" },
+        "status": { "type": "string", "enum": ["pago", "pendente"] },
+        "paymentMethod": { "type": "string" },
+        "origin": { "type": "string" },
+        "originId": { "type": "string" },
+        "uid": { "type": "string" }
+      },
+      "required": ["date", "description", "amount", "type", "uid"]
+    },
+    "AccessRequest": {
+      "title": "Access Request",
+      "description": "A request from a new user to gain access to the system.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "status", "created_at"]
+    }
+  },
+  "firestore": {
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Collection of clients."
+    },
+    "/suppliers/{supplierId}": {
+      "schema": "Supplier",
+      "description": "Collection of suppliers."
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Collection of products."
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of orders."
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Collection of financial transactions."
+    },
+    "/access_requests/{requestId}": {
+      "schema": "AccessRequest",
+      "description": "Collection of access requests from new users."
+    }
+  }
+}
