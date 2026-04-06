@@ -43,7 +43,9 @@ import {
   Image as ImageIcon,
   Map as MapIcon,
   BrainCircuit,
-  Zap
+  Zap,
+  Wrench,
+  Package
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
@@ -54,11 +56,14 @@ import {
   BarChart, Bar, Cell, PieChart, Pie
 } from 'recharts';
 import { FinancialView } from './FinancialView';
+import { OrdemServicoView } from './components/OrdemServicoView';
 import { formatCurrency, formatPercent, cn } from './lib/utils';
-import { OrderStatus, Client, Order, Product, Supplier, Transaction } from './types';
+import { OrderStatus, Client, Order, Product, Supplier, Transaction, OrdemServico } from './types';
 import { supabase } from './lib/supabase';
 import { LoginScreen } from './components/LoginScreen';
 import { AdminView } from './components/AdminView';
+import { UserPanel } from './components/UserPanel';
+import { ProfileView } from './components/ProfileView';
 import { Session, User } from '@supabase/supabase-js';
 
 // --- Components ---
@@ -170,7 +175,30 @@ const InsightItem = ({ insight }: { insight: any }) => {
 
 // --- Views ---
 
-const DashboardView = ({ products, transactions }: { products: any[], transactions: any[] }) => {
+const DashboardView = ({ products, transactions, clients, alerts }: { products: any[], transactions: any[], clients: any[], alerts: any }) => {
+  const birthdays = useMemo(() => {
+    const now = new Date();
+    const nextWeek = new Date();
+    nextWeek.setDate(now.getDate() + 7);
+
+    return clients.filter(c => {
+      if (!c.birthday) return false;
+      // Assuming format DD/MM
+      const parts = c.birthday.split('/');
+      if (parts.length < 2) return false;
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]);
+      const bDate = new Date(now.getFullYear(), month - 1, day);
+      
+      // Handle end of year wrap around
+      if (bDate < now && month === 1 && now.getMonth() === 11) {
+        bDate.setFullYear(now.getFullYear() + 1);
+      }
+
+      return bDate >= now && bDate <= nextWeek;
+    });
+  }, [clients]);
+
   const data = useMemo(() => {
     const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -188,9 +216,9 @@ const DashboardView = ({ products, transactions }: { products: any[], transactio
       const day = last7Days.find(d => d.date === t.date);
       if (day) {
         if (t.type === 'entrada') {
-          day.sales += t.amount;
+          day.sales += t.amount || t.value || 0;
           // Simplified profit calculation: 40% of sales if not specified
-          day.profit += t.amount * 0.4;
+          day.profit += (t.amount || t.value || 0) * 0.4;
         }
       }
     });
@@ -229,8 +257,8 @@ const DashboardView = ({ products, transactions }: { products: any[], transactio
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     });
 
-    const revenue = monthTransactions.filter(t => t.type === 'entrada').reduce((acc, t) => acc + t.amount, 0);
-    const expenses = monthTransactions.filter(t => t.type === 'saída').reduce((acc, t) => acc + t.amount, 0);
+    const revenue = monthTransactions.filter(t => t.type === 'entrada').reduce((acc, t) => acc + (t.amount || t.value || 0), 0);
+    const expenses = monthTransactions.filter(t => t.type === 'saída').reduce((acc, t) => acc + (t.amount || t.value || 0), 0);
     const profit = revenue - expenses;
     const ticketMedio = revenue / (monthTransactions.filter(t => t.type === 'entrada').length || 1);
 
@@ -239,6 +267,61 @@ const DashboardView = ({ products, transactions }: { products: any[], transactio
 
   return (
     <div className="space-y-8">
+      {/* Alert Banner */}
+      {(alerts.ordensAtrasadas.length > 0 || alerts.ordensVencendo.length > 0 || alerts.contasAtrasadas.length > 0 || alerts.estoqueCritico.length > 0) && (
+        <div className="space-y-4">
+          <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
+            <AlertCircle size={14} /> Atenção
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {alerts.ordensAtrasadas.length > 0 && (
+              <div className="bg-red-50 border-2 border-red-100 p-4 rounded-2xl flex items-center gap-4">
+                <div className="w-10 h-10 bg-red-100 text-red-600 rounded-xl flex items-center justify-center">
+                  <Clock size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-black text-red-600 uppercase tracking-widest">{alerts.ordensAtrasadas.length} Pedidos Atrasados</p>
+                  <p className="text-[10px] text-red-400 font-bold">Ação imediata necessária</p>
+                </div>
+              </div>
+            )}
+            {alerts.ordensVencendo.length > 0 && (
+              <div className="bg-amber-50 border-2 border-amber-100 p-4 rounded-2xl flex items-center gap-4">
+                <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center">
+                  <Calendar size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-black text-amber-600 uppercase tracking-widest">{alerts.ordensVencendo.length} Vencendo em 3 dias</p>
+                  <p className="text-[10px] text-amber-400 font-bold">Prepare as entregas</p>
+                </div>
+              </div>
+            )}
+            {alerts.contasAtrasadas.length > 0 && (
+              <div className="bg-red-50 border-2 border-red-100 p-4 rounded-2xl flex items-center gap-4">
+                <div className="w-10 h-10 bg-red-100 text-red-600 rounded-xl flex items-center justify-center">
+                  <DollarSign size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-black text-red-600 uppercase tracking-widest">{alerts.contasAtrasadas.length} Contas Atrasadas</p>
+                  <p className="text-[10px] text-red-400 font-bold">Verifique o financeiro</p>
+                </div>
+              </div>
+            )}
+            {alerts.estoqueCritico.length > 0 && (
+              <div className="bg-orange-50 border-2 border-orange-100 p-4 rounded-2xl flex items-center gap-4">
+                <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center">
+                  <Package size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-black text-orange-600 uppercase tracking-widest">{alerts.estoqueCritico.length} Estoque Crítico</p>
+                  <p className="text-[10px] text-orange-400 font-bold">Reposição necessária</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard label="Faturamento Mês" value={formatCurrency(totals.revenue)} trend="up" trendValue="+12.5%" icon={DollarSign} />
         <StatCard label="Lucro Líquido" value={formatCurrency(totals.profit)} trend="up" trendValue="+8.2%" icon={TrendingUp} />
@@ -255,8 +338,8 @@ const DashboardView = ({ products, transactions }: { products: any[], transactio
               <option>Último mês</option>
             </select>
           </div>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ width: "100%", height: 300 }}>
+            <ResponsiveContainer width="100%" height={300}>
               <LineChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9ca3af'}} dy={10} />
@@ -271,23 +354,52 @@ const DashboardView = ({ products, transactions }: { products: any[], transactio
           </div>
         </div>
 
-        <div className="premium-card p-6">
-          <h3 className="text-lg font-bold mb-6">Insights Automáticos</h3>
-          <div className="space-y-1">
-            {/* Insights could be generated by AI or calculated from data */}
-            <div className="text-xs text-gray-400 italic p-4">Nenhum insight disponível no momento.</div>
+        <div className="space-y-6">
+          <div className="premium-card p-6">
+            <h3 className="text-lg font-bold mb-6">Insights Automáticos</h3>
+            <div className="space-y-1">
+              {/* Insights could be generated by AI or calculated from data */}
+              <div className="text-xs text-gray-400 italic p-4">Nenhum insight disponível no momento.</div>
+            </div>
+            <button className="w-full mt-6 py-3 text-xs font-bold text-gray-500 hover:text-black transition-colors flex items-center justify-center gap-2">
+              Ver todos os alertas <ChevronRight size={14} />
+            </button>
           </div>
-          <button className="w-full mt-6 py-3 text-xs font-bold text-gray-500 hover:text-black transition-colors flex items-center justify-center gap-2">
-            Ver todos os alertas <ChevronRight size={14} />
-          </button>
+
+          {birthdays.length > 0 && (
+            <div className="premium-card p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-purple-100">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">🎂 Aniversariantes</h3>
+              <div className="space-y-3">
+                {birthdays.map(client => (
+                  <div key={client.id} className="flex items-center justify-between bg-white/60 p-3 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center font-bold text-[10px]">
+                        {client.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold">{client.name}</p>
+                        <p className="text-[10px] text-gray-400">{client.birthday}</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => window.open(`https://wa.me/${client.whatsapp.replace(/\D/g, '')}?text=Parabéns, ${client.name}! 🎉`, '_blank')}
+                      className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                    >
+                      <Phone size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="premium-card p-6">
           <h3 className="text-lg font-bold mb-6">Categorias mais Vendidas</h3>
-          <div className="h-[250px] flex items-center">
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ width: "100%", height: 250 }} className="flex items-center">
+            <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie
                   data={pieData}
@@ -689,6 +801,7 @@ const StockView = ({ products, setProducts, onAddProduct, onUpdateProduct, onDel
                       </div>
                     </th>
                     <th className="px-6 py-4 text-[10px] uppercase tracking-widest text-gray-400 font-bold text-right">Status</th>
+                    <th className="px-6 py-4 text-[10px] uppercase tracking-widest text-gray-400 font-bold text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -810,6 +923,20 @@ const StockView = ({ products, setProducts, onAddProduct, onUpdateProduct, onDel
                             )}
                           </div>
                         )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('Tem certeza que deseja excluir este produto?')) {
+                              onDeleteProduct(item.id);
+                            }
+                          }}
+                          className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                          title="Excluir Produto"
+                        >
+                          <Trash2 size={18} />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -1103,9 +1230,9 @@ const StockView = ({ products, setProducts, onAddProduct, onUpdateProduct, onDel
               )}
 
               {activeModalTab === 'evolution' && (
-                <div className="h-[300px] w-full pt-4">
+                <div style={{ width: "100%", height: 300, paddingTop: '1rem' }}>
                   {selectedProduct.stockEvolution?.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height={300}>
                       <LineChart data={selectedProduct.stockEvolution}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                         <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} />
@@ -2678,7 +2805,7 @@ const OrderForm = ({ onClose, products, clients, onAddOrder }: { onClose: () => 
   );
 };
 
-const OrdersView = ({ products, clients, orders, setOrders, onAddOrder }: { products: any[], clients: Client[], orders: Order[], setOrders: React.Dispatch<React.SetStateAction<Order[]>>, onAddOrder: (order: Order) => void }) => {
+const OrdersView = ({ products, clients, orders, setOrders, onAddOrder, onDeleteOrder }: { products: any[], clients: Client[], orders: Order[], setOrders: React.Dispatch<React.SetStateAction<Order[]>>, onAddOrder: (order: Order) => void, onDeleteOrder: (id: string) => void }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   
@@ -2885,6 +3012,17 @@ const OrdersView = ({ products, clients, orders, setOrders, onAddOrder }: { prod
                         title="Gerar PDF da Ordem"
                       >
                         <Download size={18} />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if (confirm('Tem certeza que deseja excluir esta ordem?')) {
+                            onDeleteOrder(order.id);
+                          }
+                        }}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-red-500"
+                        title="Excluir Ordem"
+                      >
+                        <Trash2 size={18} />
                       </button>
                       <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-black">
                         <ChevronRight size={18} />
@@ -3093,10 +3231,16 @@ const ClientForm = ({ onClose, onAddClient }: { onClose: () => void, onAddClient
   );
 };
 
-const ClientDetailsModal = ({ client, orders, onClose }: { client: Client, orders: Order[], onClose: () => void }) => {
+const ClientDetailsModal = ({ client, orders, ordensServico, onClose }: { client: Client, orders: Order[], ordensServico: OrdemServico[], onClose: () => void }) => {
+  const [activeTab, setActiveTab] = useState<'orders' | 'repairs'>('orders');
+
   const clientOrders = useMemo(() => {
     return orders.filter(o => o.clientId === client.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [client.id, orders]);
+
+  const clientOS = useMemo(() => {
+    return ordensServico.filter(os => os.clientId === client.id).sort((a, b) => b.dataEntrada.localeCompare(a.dataEntrada));
+  }, [client.id, ordensServico]);
 
   const averageTicket = useMemo(() => {
     return clientOrders.length > 0 ? client.totalSpent / clientOrders.length : 0;
@@ -3144,42 +3288,98 @@ const ClientDetailsModal = ({ client, orders, onClose }: { client: Client, order
             </div>
           </div>
 
-          <div>
-            <h4 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <History size={20} /> Histórico de Compras
-            </h4>
-            {clientOrders.length > 0 ? (
-              <div className="space-y-4">
-                {clientOrders.map(order => (
-                  <div key={order.id} className="p-4 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-colors">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="text-sm font-bold">{order.productDescription}</p>
-                        <p className="text-[10px] text-gray-400 uppercase font-bold">
-                          {new Date(order.createdAt).toLocaleDateString('pt-BR')} • ID: {order.id}
-                        </p>
-                      </div>
-                      <p className="text-sm font-black">{formatCurrency(order.totalValue)}</p>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className={cn(
-                        "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
-                        order.status === 'Pago' ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
-                      )}>
-                        {order.status}
-                      </span>
-                      <p className="text-[10px] text-gray-400 italic">{order.measurements}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
-                <ShoppingBag className="mx-auto text-gray-300 mb-3" size={32} />
-                <p className="text-sm text-gray-400 font-medium">Nenhuma compra registrada ainda.</p>
-              </div>
-            )}
+          <div className="flex gap-4 border-b border-gray-100">
+            <button 
+              onClick={() => setActiveTab('orders')}
+              className={cn(
+                "pb-4 text-sm font-bold transition-all relative",
+                activeTab === 'orders' ? "text-black" : "text-gray-400"
+              )}
+            >
+              Histórico de Compras
+              {activeTab === 'orders' && <motion.div layoutId="clientTab" className="absolute bottom-0 left-0 right-0 h-1 bg-black rounded-full" />}
+            </button>
+            <button 
+              onClick={() => setActiveTab('repairs')}
+              className={cn(
+                "pb-4 text-sm font-bold transition-all relative",
+                activeTab === 'repairs' ? "text-black" : "text-gray-400"
+              )}
+            >
+              Consertos / OS
+              {activeTab === 'repairs' && <motion.div layoutId="clientTab" className="absolute bottom-0 left-0 right-0 h-1 bg-black rounded-full" />}
+            </button>
           </div>
+
+          {activeTab === 'orders' ? (
+            <div>
+              {clientOrders.length > 0 ? (
+                <div className="space-y-4">
+                  {clientOrders.map(order => (
+                    <div key={order.id} className="p-4 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-colors">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="text-sm font-bold">{order.productDescription}</p>
+                          <p className="text-[10px] text-gray-400 uppercase font-bold">
+                            {new Date(order.createdAt).toLocaleDateString('pt-BR')} • ID: {order.id}
+                          </p>
+                        </div>
+                        <p className="text-sm font-black">{formatCurrency(order.totalValue)}</p>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                          order.status === 'Pago' ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
+                        )}>
+                          {order.status}
+                        </span>
+                        <p className="text-[10px] text-gray-400 italic">{order.measurements}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+                  <ShoppingBag className="mx-auto text-gray-300 mb-3" size={32} />
+                  <p className="text-sm text-gray-400 font-medium">Nenhuma compra registrada ainda.</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              {clientOS.length > 0 ? (
+                <div className="space-y-4">
+                  {clientOS.map(os => (
+                    <div key={os.id} className="p-4 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-colors">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="text-sm font-bold">{os.pecaDescricao}</p>
+                          <p className="text-[10px] text-gray-400 uppercase font-bold">
+                            Entrada: {new Date(os.dataEntrada).toLocaleDateString('pt-BR')} • OS: {os.id.substring(0, 8)}
+                          </p>
+                        </div>
+                        <p className="text-sm font-black">{formatCurrency(os.valorConserto || 0)}</p>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                          os.status === 'concluida' ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
+                        )}>
+                          {os.status.replace('_', ' ')}
+                        </span>
+                        <p className="text-[10px] text-gray-400 italic">{os.tipoDano.replace('_', ' ')}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+                  <Wrench className="mx-auto text-gray-300 mb-3" size={32} />
+                  <p className="text-sm text-gray-400 font-medium">Nenhum conserto registrado ainda.</p>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
@@ -3201,10 +3401,11 @@ const ClientDetailsModal = ({ client, orders, onClose }: { client: Client, order
   );
 };
 
-const CRMView = ({ clients, setClients, orders, onAddClient, onUpdateClient, onDeleteClient }: { 
+const CRMView = ({ clients, setClients, orders, ordensServico, onAddClient, onUpdateClient, onDeleteClient }: { 
   clients: Client[], 
   setClients: React.Dispatch<React.SetStateAction<Client[]>>, 
   orders: Order[],
+  ordensServico: OrdemServico[],
   onAddClient: (data: any) => Promise<void>,
   onUpdateClient: (id: string, data: Partial<Client>) => Promise<void>,
   onDeleteClient: (id: string) => Promise<void>
@@ -3230,6 +3431,7 @@ const CRMView = ({ clients, setClients, orders, onAddClient, onUpdateClient, onD
         <ClientDetailsModal 
           client={selectedClient} 
           orders={orders} 
+          ordensServico={ordensServico}
           onClose={() => setSelectedClient(null)} 
         />
       )}
@@ -3993,14 +4195,64 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [ordensServico, setOrdensServico] = useState<OrdemServico[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  const alerts = useMemo(() => {
+    const now = new Date();
+    const threeDaysFromNow = new Date();
+    threeDaysFromNow.setDate(now.getDate() + 3);
+
+    const ordensAtrasadas = orders.filter(o => {
+      if (!o.dueDate || o.status === 'Pago') return false;
+      return new Date(o.dueDate) < now;
+    });
+
+    const ordensVencendo = orders.filter(o => {
+      if (!o.dueDate || o.status === 'Pago') return false;
+      const d = new Date(o.dueDate);
+      return d >= now && d <= threeDaysFromNow;
+    });
+
+    const contasAtrasadas = transactions.filter(t => 
+      t.status === 'pendente' && new Date(t.date) < now
+    );
+
+    const estoqueCritico = products.filter(p => p.stock <= p.minStock);
+
+    return { ordensAtrasadas, ordensVencendo, contasAtrasadas, estoqueCritico };
+  }, [orders, transactions, products]);
+
+  const totalAlerts = alerts.ordensAtrasadas.length + alerts.ordensVencendo.length + alerts.contasAtrasadas.length + alerts.estoqueCritico.length;
+
+  // Toast State
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+
+  // Confirm Modal State
+  const [confirmModal, setConfirmModal] = useState<{ 
+    isOpen: boolean, 
+    title: string, 
+    message: string, 
+    onConfirm: () => void 
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   useEffect(() => {
     // Check for placeholder credentials
-    if (import.meta.env.VITE_SUPABASE_URL?.includes('placeholder')) {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_URL : '');
+    if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
       console.error('Supabase credentials are placeholders. Please set them in the environment variables.');
-      setError('Erro de Configuração: As credenciais do banco de dados não foram configuradas.');
+      setError('Erro de Configuração: As credenciais do banco de dados não foram configuradas nos Secrets.');
       setIsAuthReady(true);
       return;
     }
@@ -4011,6 +4263,9 @@ export default function App() {
       })
       .catch(err => {
         console.error('Error getting session:', err);
+        if (err.message === 'Failed to fetch') {
+          setError('Erro de conexão com o banco de dados. Verifique se a URL e a Key estão corretas nos Secrets.');
+        }
       })
       .finally(() => {
         setIsAuthReady(true);
@@ -4025,6 +4280,14 @@ export default function App() {
 
   const fetchData = async () => {
     if (!session?.user) return;
+    
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_URL : '');
+    if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
+      setError('Configuração do Supabase ausente. Por favor, adicione as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY nos Secrets.');
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -4034,24 +4297,52 @@ export default function App() {
         { data: suppliersData, error: suppliersError },
         { data: productsData, error: productsError },
         { data: ordersData, error: ordersError },
-        { data: transactionsData, error: transactionsError }
+        { data: transactionsData, error: transactionsError },
+        { data: osData, error: osError }
       ] = await Promise.all([
         supabase.from('clients').select('*').eq('user_id', session.user.id),
         supabase.from('suppliers').select('*').eq('user_id', session.user.id),
         supabase.from('products').select('*').eq('user_id', session.user.id),
         supabase.from('orders').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
-        supabase.from('transactions').select('*').eq('user_id', session.user.id).order('date', { ascending: false })
+        supabase.from('transactions').select('*').eq('user_id', session.user.id).order('date', { ascending: false }),
+        supabase.from('ordens_servico').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false })
       ]);
 
-      if (clientsError || suppliersError || productsError || ordersError || transactionsError) {
+      if (clientsError || suppliersError || productsError || ordersError || transactionsError || osError) {
         throw new Error('Erro ao carregar dados do servidor.');
       }
 
       if (clientsData) setClients(clientsData as Client[]);
       if (suppliersData) setSuppliers(suppliersData as Supplier[]);
       if (productsData) setProducts(productsData as Product[]);
-      if (ordersData) setOrders(ordersData as Order[]);
+      if (ordersData) {
+        const fetchedOrders = ordersData as Order[];
+        setOrders(fetchedOrders);
+        
+        // Automatic Overdue Status Update
+        const today = new Date();
+        const overdueOrders = fetchedOrders.filter(o => 
+          o.status === 'Aberto' && o.dueDate && new Date(o.dueDate) < today
+        );
+        
+        if (overdueOrders.length > 0) {
+          for (const order of overdueOrders) {
+            await supabase
+              .from('orders')
+              .update({ status: 'Atrasado' })
+              .eq('id', order.id);
+          }
+          // Re-fetch orders to get updated status
+          const { data: updatedOrders } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .order('created_at', { ascending: false });
+          if (updatedOrders) setOrders(updatedOrders as Order[]);
+        }
+      }
       if (transactionsData) setTransactions(transactionsData as Transaction[]);
+      if (osData) setOrdensServico(osData as OrdemServico[]);
     } catch (err: any) {
       console.error('Fetch Error:', err);
       setError(err.message || 'Ocorreu um erro ao carregar os dados.');
@@ -4081,11 +4372,16 @@ export default function App() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${session.user.id}` }, fetchData)
         .subscribe();
 
+      const osChannel = supabase.channel('os-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'ordens_servico', filter: `user_id=eq.${session.user.id}` }, fetchData)
+        .subscribe();
+
       return () => {
         supabase.removeChannel(clientsChannel);
         supabase.removeChannel(productsChannel);
         supabase.removeChannel(ordersChannel);
         supabase.removeChannel(transactionsChannel);
+        supabase.removeChannel(osChannel);
       };
     }
   }, [isAuthReady, session]);
@@ -4173,84 +4469,219 @@ export default function App() {
 
   const handleDeleteClient = async (clientId: string) => {
     if (!session?.user) return;
-    try {
-      await supabase
-        .from('clients')
-        .delete()
-        .eq('id', clientId);
-    } catch (error) {
-      console.error("Error deleting client:", error);
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Excluir Cliente',
+      message: 'Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('clients')
+            .delete()
+            .eq('id', clientId)
+            .eq('user_id', session.user.id);
+          
+          if (error) throw error;
+          setClients(prev => prev.filter(c => c.id !== clientId));
+          showToast('Cliente excluído com sucesso');
+        } catch (error) {
+          console.error("Error deleting client:", error);
+          showToast('Erro ao excluir cliente', 'error');
+        }
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   const handleAddSupplier = async (supplierData: any) => {
     if (!session?.user) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('suppliers')
         .insert([{ ...supplierData, user_id: session.user.id }]);
+      if (error) throw error;
+      showToast('Fornecedor adicionado com sucesso');
     } catch (error) {
       console.error("Error adding supplier:", error);
+      showToast('Erro ao adicionar fornecedor', 'error');
     }
   };
 
   const handleUpdateSupplier = async (supplierId: string, supplierData: Partial<Supplier>) => {
     if (!session?.user) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('suppliers')
         .update(supplierData)
         .eq('id', supplierId);
+      if (error) throw error;
+      showToast('Fornecedor atualizado com sucesso');
     } catch (error) {
       console.error("Error updating supplier:", error);
+      showToast('Erro ao atualizar fornecedor', 'error');
     }
   };
 
   const handleDeleteSupplier = async (supplierId: string) => {
     if (!session?.user) return;
-    try {
-      await supabase
-        .from('suppliers')
-        .delete()
-        .eq('id', supplierId);
-    } catch (error) {
-      console.error("Error deleting supplier:", error);
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Excluir Fornecedor',
+      message: 'Tem certeza que deseja excluir este fornecedor?',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('suppliers')
+            .delete()
+            .eq('id', supplierId)
+            .eq('user_id', session.user.id);
+          
+          if (error) throw error;
+          setSuppliers(prev => prev.filter(s => s.id !== supplierId));
+          showToast('Fornecedor excluído com sucesso');
+        } catch (error) {
+          console.error("Error deleting supplier:", error);
+          showToast('Erro ao excluir fornecedor', 'error');
+        }
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   const handleAddProduct = async (productData: any) => {
     if (!session?.user) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('products')
         .insert([{ ...productData, user_id: session.user.id }]);
+      if (error) throw error;
+      showToast('Produto adicionado com sucesso');
     } catch (error) {
       console.error("Error adding product:", error);
+      showToast('Erro ao adicionar produto', 'error');
     }
   };
 
   const handleUpdateProduct = async (productId: string, productData: Partial<Product>) => {
     if (!session?.user) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('products')
         .update(productData)
         .eq('id', productId);
+      if (error) throw error;
+      showToast('Produto atualizado com sucesso');
     } catch (error) {
       console.error("Error updating product:", error);
+      showToast('Erro ao atualizar produto', 'error');
     }
   };
 
   const handleDeleteProduct = async (productId: string) => {
     if (!session?.user) return;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Excluir Produto',
+      message: 'Tem certeza que deseja excluir este produto?',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('products')
+            .delete()
+            .eq('id', productId)
+            .eq('user_id', session.user.id);
+          
+          if (error) throw error;
+          setProducts(prev => prev.filter(p => p.id !== productId));
+          showToast('Produto excluído com sucesso');
+        } catch (error) {
+          console.error("Error deleting product:", error);
+          showToast('Erro ao excluir produto', 'error');
+        }
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!session?.user) return;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Excluir Pedido',
+      message: 'Tem certeza que deseja excluir este pedido?',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('orders')
+            .delete()
+            .eq('id', orderId)
+            .eq('user_id', session.user.id);
+          
+          if (error) throw error;
+          setOrders(prev => prev.filter(o => o.id !== orderId));
+          showToast('Pedido excluído com sucesso');
+        } catch (error) {
+          console.error("Error deleting order:", error);
+          showToast('Erro ao excluir pedido', 'error');
+        }
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
+
+  const handleAddOS = async (osData: any) => {
+    if (!session?.user) return;
     try {
-      await supabase
-        .from('products')
-        .delete()
-        .eq('id', productId);
+      const { error } = await supabase
+        .from('ordens_servico')
+        .insert([{ ...osData, user_id: session.user.id }]);
+      if (error) throw error;
+      showToast('Ordem de Serviço aberta com sucesso');
     } catch (error) {
-      console.error("Error deleting product:", error);
+      console.error("Error adding OS:", error);
+      showToast('Erro ao abrir OS', 'error');
     }
+  };
+
+  const handleUpdateOS = async (osId: string, osData: any) => {
+    if (!session?.user) return;
+    try {
+      const { error } = await supabase
+        .from('ordens_servico')
+        .update(osData)
+        .eq('id', osId);
+      if (error) throw error;
+      showToast('Ordem de Serviço atualizada');
+    } catch (error) {
+      console.error("Error updating OS:", error);
+      showToast('Erro ao atualizar OS', 'error');
+    }
+  };
+
+  const handleDeleteOS = async (osId: string) => {
+    if (!session?.user) return;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Excluir OS',
+      message: 'Tem certeza que deseja excluir esta Ordem de Serviço?',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('ordens_servico')
+            .delete()
+            .eq('id', osId)
+            .eq('user_id', session.user.id);
+          
+          if (error) throw error;
+          setOrdensServico(prev => prev.filter(os => os.id !== osId));
+          showToast('OS excluída com sucesso');
+        } catch (error) {
+          console.error("Error deleting OS:", error);
+          showToast('Erro ao excluir OS', 'error');
+        }
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   if (!isAuthReady) {
@@ -4267,18 +4698,20 @@ export default function App() {
 
   const renderContent = () => {
     switch(activeTab) {
-      case 'dashboard': return <DashboardView products={products} transactions={transactions} />;
+      case 'dashboard': return <DashboardView products={products} transactions={transactions} clients={clients} alerts={alerts} />;
       case 'pricing': return <PricingView products={products} setProducts={setProducts} onUpdateProduct={handleUpdateProduct} />;
-      case 'orders': return <OrdersView products={products} clients={clients} orders={orders} setOrders={setOrders} onAddOrder={handleAddOrder} />;
-      case 'crm': return <CRMView clients={clients} setClients={setClients} orders={orders} onAddClient={handleAddClient} onUpdateClient={handleUpdateClient} onDeleteClient={handleDeleteClient} />;
+      case 'orders': return <OrdersView products={products} clients={clients} orders={orders} setOrders={setOrders} onAddOrder={handleAddOrder} onDeleteOrder={handleDeleteOrder} />;
+      case 'crm': return <CRMView clients={clients} setClients={setClients} orders={orders} ordensServico={ordensServico} onAddClient={handleAddClient} onUpdateClient={handleUpdateClient} onDeleteClient={handleDeleteClient} />;
       case 'suppliers': return <SuppliersView suppliers={suppliers} setSuppliers={setSuppliers} onAddSupplier={handleAddSupplier} onUpdateSupplier={handleUpdateSupplier} onDeleteSupplier={handleDeleteSupplier} />;
-      case 'financial': return <FinancialView products={products} orders={orders} clients={clients} suppliers={suppliers} transactions={transactions} user={session.user} />;
+      case 'financial': return <FinancialView products={products} orders={orders} clients={clients} suppliers={suppliers} transactions={transactions} ordensServico={ordensServico} user={session.user} />;
+      case 'os': return <OrdemServicoView ordensServico={ordensServico} orders={orders} clients={clients} onAddOS={handleAddOS} onUpdateOS={handleUpdateOS} onDeleteOS={handleDeleteOS} />;
       case 'ai': return <AIAssistantView />;
       case 'calendar': return <CalendarView />;
       case 'stock': return <StockView products={products} setProducts={setProducts} onAddProduct={handleAddProduct} onUpdateProduct={handleUpdateProduct} onDeleteProduct={handleDeleteProduct} />;
       case 'automations': return <AutomationsView />;
       case 'admin': return <AdminView />;
-      default: return <DashboardView products={products} transactions={transactions} />;
+      case 'profile': return <ProfileView user={session?.user} />;
+      default: return <DashboardView products={products} transactions={transactions} clients={clients} alerts={alerts} />;
     }
   };
 
@@ -4347,12 +4780,13 @@ export default function App() {
                 <SidebarItem icon={TrendingUp} label="Controle de estoque" active={activeTab === 'stock'} onClick={() => { setActiveTab('stock'); setIsMobileMenuOpen(false); }} />
                 <SidebarItem icon={ShoppingBag} label="Ordem" active={activeTab === 'orders'} onClick={() => { setActiveTab('orders'); setIsMobileMenuOpen(false); }} />
                 <SidebarItem icon={Users} label="Cadastro de clientes" active={activeTab === 'crm'} onClick={() => { setActiveTab('crm'); setIsMobileMenuOpen(false); }} />
+                <SidebarItem icon={Wrench} label="Ordens de Serviço" active={activeTab === 'os'} onClick={() => { setActiveTab('os'); setIsMobileMenuOpen(false); }} />
                 <SidebarItem icon={Truck} label="Fornecedores" active={activeTab === 'suppliers'} onClick={() => { setActiveTab('suppliers'); setIsMobileMenuOpen(false); }} />
                 <SidebarItem icon={DollarSign} label="Financeiro" active={activeTab === 'financial'} onClick={() => { setActiveTab('financial'); setIsMobileMenuOpen(false); }} />
                 <SidebarItem icon={Sparkles} label="IA Assistente" active={activeTab === 'ai'} onClick={() => { setActiveTab('ai'); setIsMobileMenuOpen(false); }} />
                 <SidebarItem icon={Calendar} label="Calendário" active={activeTab === 'calendar'} onClick={() => { setActiveTab('calendar'); setIsMobileMenuOpen(false); }} />
                 <SidebarItem icon={Bell} label="Automações" active={activeTab === 'automations'} onClick={() => { setActiveTab('automations'); setIsMobileMenuOpen(false); }} />
-                {session?.user?.email === import.meta.env.VITE_ADMIN_EMAIL && (
+                {session?.user?.email === (import.meta.env.VITE_ADMIN_EMAIL || (typeof process !== 'undefined' ? process.env.VITE_ADMIN_EMAIL : '')) && (
                   <SidebarItem icon={Shield} label="Administração" active={activeTab === 'admin'} onClick={() => { setActiveTab('admin'); setIsMobileMenuOpen(false); }} />
                 )}
               </nav>
@@ -4391,12 +4825,13 @@ export default function App() {
             <SidebarItem icon={TrendingUp} label="Controle de estoque" active={activeTab === 'stock'} onClick={() => setActiveTab('stock')} />
             <SidebarItem icon={ShoppingBag} label="Ordem" active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} />
             <SidebarItem icon={Users} label="Cadastro de clientes" active={activeTab === 'crm'} onClick={() => setActiveTab('crm')} />
+            <SidebarItem icon={Wrench} label="Ordens de Serviço" active={activeTab === 'os'} onClick={() => setActiveTab('os')} />
             <SidebarItem icon={Truck} label="Fornecedores" active={activeTab === 'suppliers'} onClick={() => setActiveTab('suppliers')} />
             <SidebarItem icon={DollarSign} label="Financeiro" active={activeTab === 'financial'} onClick={() => setActiveTab('financial')} />
             <SidebarItem icon={Sparkles} label="IA Assistente" active={activeTab === 'ai'} onClick={() => setActiveTab('ai')} />
             <SidebarItem icon={Calendar} label="Calendário" active={activeTab === 'calendar'} onClick={() => setActiveTab('calendar')} />
             <SidebarItem icon={Bell} label="Automações" active={activeTab === 'automations'} onClick={() => setActiveTab('automations')} />
-            {session?.user?.email === import.meta.env.VITE_ADMIN_EMAIL && (
+            {session?.user?.email === (import.meta.env.VITE_ADMIN_EMAIL || (typeof process !== 'undefined' ? process.env.VITE_ADMIN_EMAIL : '')) && (
               <SidebarItem icon={Shield} label="Administração" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} />
             )}
           </nav>
@@ -4436,6 +4871,7 @@ export default function App() {
                activeTab === 'suppliers' ? 'Fornecedores' :
                activeTab === 'financial' ? 'Financeiro' :
                activeTab === 'ai' ? 'IA Assistente' :
+               activeTab === 'profile' ? 'Meu Perfil' :
                activeTab === 'calendar' ? 'Agenda' : 'Automações'}
             </h2>
           </div>
@@ -4453,19 +4889,14 @@ export default function App() {
             <div className="flex items-center gap-4">
               <button className="relative p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <Bell size={20} />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                {totalAlerts > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white">
+                    {totalAlerts}
+                  </span>
+                )}
               </button>
-              <div className="flex items-center gap-3 pl-4 border-l border-gray-100">
-                <div className="text-right hidden sm:block">
-                  <p className="text-sm font-bold">{session?.user.user_metadata?.full_name || session?.user.email}</p>
-                  <p className="text-[10px] text-gray-400 font-medium">Proprietária</p>
-                </div>
-                <div className="w-10 h-10 bg-gray-200 rounded-xl overflow-hidden cursor-pointer group relative" onClick={() => supabase.auth.signOut()}>
-                  <img src={session?.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${session?.user.id}`} alt="User" />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <X size={16} className="text-white" />
-                  </div>
-                </div>
+              <div className="pl-4 border-l border-gray-100">
+                <UserPanel user={session?.user} onProfileClick={() => setActiveTab('profile')} />
               </div>
             </div>
           </div>
@@ -4486,6 +4917,65 @@ export default function App() {
           </AnimatePresence>
         </div>
       </main>
+
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className={cn(
+              "fixed bottom-8 right-8 z-[200] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border-2 font-bold text-sm",
+              toast.type === 'success' ? "bg-white border-green-100 text-green-600" : "bg-white border-red-100 text-red-600"
+            )}
+          >
+            {toast.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+            {toast.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirm Modal */}
+      <AnimatePresence>
+        {confirmModal.isOpen && (
+          <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[32px] shadow-2xl p-8 text-center"
+            >
+              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <Trash2 size={32} />
+              </div>
+              <h3 className="text-xl font-black mb-2">{confirmModal.title}</h3>
+              <p className="text-gray-500 text-sm mb-8">{confirmModal.message}</p>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                  className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold text-sm hover:bg-gray-200 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={confirmModal.onConfirm}
+                  className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-bold text-sm hover:bg-red-700 transition-all shadow-lg shadow-red-200"
+                >
+                  Excluir
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
     </ErrorBoundary>
   );

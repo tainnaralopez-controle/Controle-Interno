@@ -1,11 +1,15 @@
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import geminiHandler from './api/gemini.js';
+import geminiHandler from './api/gemini.ts';
 
 dotenv.config();
+
+console.log('Environment Check:');
+console.log('- VITE_SUPABASE_URL:', process.env.VITE_SUPABASE_URL ? 'Present' : 'Missing');
+console.log('- VITE_SUPABASE_ANON_KEY:', process.env.VITE_SUPABASE_ANON_KEY ? 'Present' : 'Missing');
+console.log('- GEMINI_API_KEY:', process.env.GEMINI_API_KEY ? 'Present' : 'Missing');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +19,17 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+  
+  app.get('/api/health', (req, res) => {
+    res.json({ 
+      status: 'ok', 
+      env: {
+        supabaseUrl: !!process.env.VITE_SUPABASE_URL,
+        supabaseKey: !!process.env.VITE_SUPABASE_ANON_KEY,
+        geminiKey: !!process.env.GEMINI_API_KEY
+      }
+    });
+  });
 
   // API Routes
   app.post('/api/gemini', async (req, res) => {
@@ -32,6 +47,7 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

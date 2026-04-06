@@ -57,7 +57,8 @@ export const LoginScreen = () => {
     try {
       // Check if email is approved in access_requests
       // BYPASS for admin email
-      if (email !== import.meta.env.VITE_ADMIN_EMAIL) {
+      const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || (typeof process !== 'undefined' ? process.env.VITE_ADMIN_EMAIL : '');
+      if (email !== adminEmail) {
         const { data: request, error: requestError } = await supabase
           .from('access_requests')
           .select('status')

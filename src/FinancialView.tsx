@@ -5,23 +5,29 @@ import {
 } from 'recharts';
 import {
   DollarSign, TrendingUp, TrendingDown, ShoppingBag,
-  AlertCircle, CheckCircle2, Clock, Plus, X, Download,
+  AlertCircle, CheckCircle2, Clock, Plus, X, Download, Trash2,
   Zap, Users, Package, Truck, BarChart3, Target,
-  ArrowUpRight, ArrowDownRight, Calendar, Filter
+  ArrowUpRight, ArrowDownRight, Calendar, Filter, FileText
 } from 'lucide-react';
-import { Client, Order, Product, Supplier, Transaction, TxType, TxCategory, TxStatus, TxPayment } from './types';
+import { Client, Order, Product, Supplier, Transaction, TxType, TxCategory, TxStatus, TxPayment, OrdemServico } from './types';
 import { formatCurrency, formatPercent, cn } from './lib/utils';
 import { User } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const CATEGORY_LABELS: Record<TxCategory, string> = {
   venda: 'Venda',
   compra_fornecedor: 'Compra Fornecedor',
+  impostos: 'Impostos',
+  materiais: 'Materiais',
+  pro_labore: 'Pró-labore',
+  marketing: 'Marketing',
+  aluguel: 'Aluguel',
+  despesas_fixas: 'Despesas Fixas (Luz, Água, Internet)',
+  funcionario: 'Funcionário',
   taxa: 'Taxa',
   despesa_operacional: 'Despesa Operacional',
-  salario: 'Salário',
-  aluguel: 'Aluguel',
-  marketing: 'Marketing',
   outro: 'Outro',
 };
 
@@ -43,13 +49,14 @@ const TABS = [
 ] as const;
 
 export const FinancialView = ({
-  products, orders, clients, suppliers, transactions, user
+  products, orders, clients, suppliers, transactions, ordensServico, user
 }: {
   products: Product[];
   orders: Order[];
   clients: Client[];
   suppliers: Supplier[];
   transactions: Transaction[];
+  ordensServico: OrdemServico[];
   user: User;
 }) => {
   const [activeTab, setActiveTab] = useState<typeof TABS[number]['key']>('lancamentos');
@@ -202,6 +209,105 @@ export const FinancialView = ({
       `Manuais:           ${allTransactions.filter(t => !t.isAutomatic).length}`,
     ].join('\n');
     alert(report);
+  };
+
+  const generateMonthlyReport = () => {
+    const doc = new jsPDF();
+    const now = new Date();
+    const monthName = now.toLocaleString('pt-BR', { month: 'long' });
+    const year = now.getFullYear();
+
+    // Title
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Relatório Mensal — ${monthName} / ${year}`, 105, 20, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Gerado em: ${now.toLocaleString('pt-BR')}`, 105, 28, { align: 'center' });
+
+    // Financial Summary
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Resumo Financeiro', 14, 40);
+    
+    autoTable(doc, {
+      startY: 45,
+      head: [['Indicador', 'Valor']],
+      body: [
+        ['Total de Entradas', formatCurrency(totals.entradas)],
+        ['Total de Saídas', formatCurrency(totals.saidas)],
+        ['Lucro Líquido', formatCurrency(totals.lucro)],
+        ['Margem Geral', `${totals.margem.toFixed(1)}%`],
+        ['Ticket Médio', formatCurrency(totals.ticketMedio)],
+        ['Total de Vendas', totals.vendasCount.toString()],
+      ],
+      theme: 'striped',
+      headStyles: { fillColor: [0, 0, 0] }
+    });
+
+    // Best Selling Products
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Produtos mais Vendidos', 14, (doc as any).lastAutoTable.finalY + 15);
+
+    const topProducts = [...products]
+      .sort((a, b) => (b.salesCount || 0) - (a.salesCount || 0))
+      .slice(0, 5);
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 20,
+      head: [['Produto', 'Qtd Vendida', 'Custo Total', 'Preço Médio']],
+      body: topProducts.map(p => [
+        p.description || p.name || 'N/A',
+        p.salesCount || 0,
+        formatCurrency(p.cost || 0),
+        formatCurrency(p.price || 0)
+      ]),
+      theme: 'striped',
+      headStyles: { fillColor: [0, 0, 0] }
+    });
+
+    // Recent Orders
+    doc.addPage();
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Últimos Pedidos', 14, 20);
+
+    autoTable(doc, {
+      startY: 25,
+      head: [['ID', 'Cliente', 'Data', 'Valor', 'Status']],
+      body: orders.slice(0, 15).map(o => [
+        `#${o.id.substring(0, 8)}`,
+        o.clientName,
+        new Date(o.createdAt).toLocaleDateString('pt-BR'),
+        formatCurrency(o.totalValue),
+        o.status
+      ]),
+      theme: 'striped',
+      headStyles: { fillColor: [0, 0, 0] }
+    });
+
+    // Recent OS
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Ordens de Serviço Recentes', 14, (doc as any).lastAutoTable.finalY + 15);
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 20,
+      head: [['ID', 'Cliente', 'Peça', 'Dano', 'Status']],
+      body: ordensServico.slice(0, 10).map(os => [
+        `#${os.id.substring(0, 8)}`,
+        os.clientName,
+        os.pecaDescricao,
+        os.tipoDano,
+        os.status
+      ]),
+      theme: 'striped',
+      headStyles: { fillColor: [0, 0, 0] }
+    });
+
+    doc.save(`relatorio_mensal_${monthName}_${year}.pdf`);
   };
 
   const urgencyBadge = (date: string) => {
@@ -403,12 +509,20 @@ export const FinancialView = ({
             </button>
           ))}
         </div>
-        <button
-          onClick={handleExport}
-          className="flex items-center gap-2 border-2 border-gray-200 px-4 py-2.5 rounded-xl text-sm font-bold hover:border-black transition"
-        >
-          <Download size={16} /> Exportar
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={generateMonthlyReport}
+            className="flex items-center gap-2 bg-black text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-800 transition shadow-lg"
+          >
+            <FileText size={16} /> Relatório PDF
+          </button>
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 border-2 border-gray-200 px-4 py-2.5 rounded-xl text-sm font-bold hover:border-black transition"
+          >
+            <Download size={16} /> Exportar
+          </button>
+        </div>
       </div>
 
       {activeTab === 'lancamentos' && (
@@ -540,7 +654,7 @@ export const FinancialView = ({
                             className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
                             title="Excluir"
                           >
-                            <Plus className="rotate-45" size={16} />
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       </td>
@@ -642,7 +756,7 @@ export const FinancialView = ({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="premium-card p-6">
               <h3 className="font-bold mb-6">Entradas vs Saídas por Mês</h3>
-              <div style={{ height: 320 }}>
+              <div style={{ width: "100%", height: 320 }}>
                 <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
@@ -661,7 +775,7 @@ export const FinancialView = ({
 
             <div className="premium-card p-6">
               <h3 className="font-bold mb-6">Evolução do Lucro Líquido</h3>
-              <div style={{ height: 300 }}>
+              <div style={{ width: "100%", height: 300 }}>
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={monthlyData.map(d => ({ ...d, lucro: d.entradas - d.saidas }))} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
@@ -682,7 +796,7 @@ export const FinancialView = ({
             <div className="premium-card p-6 lg:col-span-1">
               <h3 className="font-bold mb-6">Despesas por Categoria</h3>
               <div className="flex flex-col items-center gap-6">
-                <div style={{ height: 220, width: '100%' }}>
+                <div style={{ width: '100%', height: 220 }}>
                   <ResponsiveContainer width="100%" height={220}>
                     <PieChart>
                       <Pie 
