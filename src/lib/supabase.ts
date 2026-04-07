@@ -1,14 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_URL : '');
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_ANON_KEY : '');
-
-console.log('Supabase Client Config Check:');
-console.log('- URL:', supabaseUrl ? 'Present' : 'Missing');
-console.log('- Key:', supabaseKey ? 'Present' : 'Missing');
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  console.warn("Supabase credentials missing. Please check your environment variables.");
+  throw new Error("Supabase NÃO configurado. Verifique as variáveis de ambiente.");
 }
 
-export const supabase = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseKey || 'placeholder');
+export const supabase = createClient(supabaseUrl, supabaseKey);
