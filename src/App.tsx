@@ -4447,9 +4447,13 @@ export default function App() {
   const handleAddClient = async (clientData: any) => {
     if (!session?.user) return;
     try {
-      await supabase
+      const { data, error } = await supabase
         .from('clients')
-        .insert([{ ...clientData, purchaseHistory: [], totalSpent: 0, user_id: session.user.id }]);
+        .insert([{ ...clientData, purchaseHistory: [], totalSpent: 0, user_id: session.user.id }])
+        .select();
+      
+      if (error) throw error;
+      if (data) setClients(prev => [...prev, ...data]);
     } catch (error) {
       console.error("Error adding client:", error);
     }
@@ -4458,10 +4462,14 @@ export default function App() {
   const handleUpdateClient = async (clientId: string, clientData: Partial<Client>) => {
     if (!session?.user) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('clients')
         .update(clientData)
-        .eq('id', clientId);
+        .eq('id', clientId)
+        .eq('user_id', session.user.id);
+      
+      if (error) throw error;
+      setClients(prev => prev.map(c => c.id === clientId ? { ...c, ...clientData } : c));
     } catch (error) {
       console.error("Error updating client:", error);
     }

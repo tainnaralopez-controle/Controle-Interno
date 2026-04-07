@@ -15,7 +15,6 @@ export function UserPanel({ user, onProfileClick }: UserPanelProps) {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    window.location.reload();
   };
 
   const handleProfileClick = () => {

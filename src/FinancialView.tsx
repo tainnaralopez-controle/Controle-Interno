@@ -756,7 +756,7 @@ export const FinancialView = ({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="premium-card p-6">
               <h3 className="font-bold mb-6">Entradas vs Saídas por Mês</h3>
-              <div style={{ width: "100%", height: 320 }}>
+              <div style={{ width: "100%", height: 320 }} className="min-h-[320px]">
                 <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
@@ -775,7 +775,7 @@ export const FinancialView = ({
 
             <div className="premium-card p-6">
               <h3 className="font-bold mb-6">Evolução do Lucro Líquido</h3>
-              <div style={{ width: "100%", height: 300 }}>
+              <div style={{ width: "100%", height: 300 }} className="min-h-[300px]">
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={monthlyData.map(d => ({ ...d, lucro: d.entradas - d.saidas }))} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
@@ -796,7 +796,7 @@ export const FinancialView = ({
             <div className="premium-card p-6 lg:col-span-1">
               <h3 className="font-bold mb-6">Despesas por Categoria</h3>
               <div className="flex flex-col items-center gap-6">
-                <div style={{ width: '100%', height: 220 }}>
+                <div style={{ width: '100%', height: 220 }} className="min-h-[220px]">
                   <ResponsiveContainer width="100%" height={220}>
                     <PieChart>
                       <Pie 
