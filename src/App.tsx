@@ -4308,9 +4308,12 @@ export default function App() {
         supabase.from('ordens_servico').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false })
       ]);
 
-      if (clientsError || suppliersError || productsError || ordersError || transactionsError || osError) {
-        throw new Error('Erro ao carregar dados do servidor.');
-      }
+      if (clientsError) console.error('Erro ao carregar clientes:', clientsError);
+      if (suppliersError) console.error('Erro ao carregar fornecedores:', suppliersError);
+      if (productsError) console.error('Erro ao carregar produtos:', productsError);
+      if (ordersError) console.error('Erro ao carregar pedidos:', ordersError);
+      if (transactionsError) console.error('Erro ao carregar transações:', transactionsError);
+      if (osError) console.error('Erro ao carregar ordens de serviço:', osError);
 
       if (clientsData) setClients(clientsData as Client[]);
       if (suppliersData) setSuppliers(suppliersData as Supplier[]);
