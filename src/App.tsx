@@ -60,6 +60,7 @@ import { FinancialView } from './FinancialView';
 import { OrdemServicoView } from './components/OrdemServicoView';
 import { formatCurrency, formatPercent, cn } from './lib/utils';
 import { OrderStatus, Client, Order, Product, Supplier, Transaction, OrdemServico } from './types';
+import { mapClientFromDB, mapSupplierFromDB, mapProductFromDB, mapOrderFromDB, mapTransactionFromDB, mapOrdemServicoFromDB } from './lib/mappers';
 import { supabase } from './lib/supabase';
 import { LoginScreen } from './components/LoginScreen';
 import { AdminView } from './components/AdminView';
@@ -3942,20 +3943,20 @@ const AIAssistantView = () => {
     setMessages(prev => [...prev, { role: 'user', content: prompt }]);
     setInput('');
 
-    let modelName = 'gemini-3-flash-preview';
+    let modelName = 'gemini-2.0-flash';
     let config: any = {};
 
     if (mode === 'thinking') {
-      modelName = 'gemini-3.1-pro-preview';
+      modelName = 'gemini-1.5-pro';
       config = { thinkingConfig: { thinkingLevel: 'HIGH' } };
     } else if (mode === 'low-latency') {
-      modelName = 'gemini-3.1-flash-lite-preview';
+      modelName = 'gemini-2.0-flash-lite';
     }
 
     // Check if it's a map request
     const isMapRequest = prompt.toLowerCase().includes('onde') || prompt.toLowerCase().includes('mapa') || prompt.toLowerCase().includes('perto');
     if (isMapRequest) {
-      modelName = 'gemini-3-flash-preview';
+      modelName = 'gemini-2.0-flash';
       config.tools = [{ googleMaps: {} }];
     }
 
@@ -3993,7 +3994,7 @@ const AIAssistantView = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: { parts: [{ text: prompt }] },
-          model: 'gemini-3.1-flash-image-preview',
+          model: 'gemini-2.0-flash-preview-image-generation',
           config: {
             imageConfig: {
               aspectRatio: aspectRatio as any,
@@ -4378,11 +4379,11 @@ export default function App() {
       if (transactionsError) console.error('Erro ao carregar transações:', transactionsError);
       if (osError) console.error('Erro ao carregar ordens de serviço:', osError);
 
-      if (clientsData) setClients(clientsData as Client[]);
-      if (suppliersData) setSuppliers(suppliersData as Supplier[]);
-      if (productsData) setProducts(productsData as Product[]);
+      if (clientsData) setClients(clientsData.map(mapClientFromDB));
+      if (suppliersData) setSuppliers(suppliersData.map(mapSupplierFromDB));
+      if (productsData) setProducts(productsData.map(mapProductFromDB));
       if (ordersData) {
-        const fetchedOrders = ordersData as Order[];
+        const fetchedOrders = ordersData.map(mapOrderFromDB);
         setOrders(fetchedOrders);
         
         // Automatic Overdue Status Update
@@ -4404,11 +4405,11 @@ export default function App() {
             .select('*')
             .eq('user_id', session.user.id)
             .order('created_at', { ascending: false });
-          if (updatedOrders) setOrders(updatedOrders as Order[]);
+          if (updatedOrders) setOrders(updatedOrders.map(mapOrderFromDB));
         }
       }
-      if (transactionsData) setTransactions(transactionsData as Transaction[]);
-      if (osData) setOrdensServico(osData as OrdemServico[]);
+      if (transactionsData) setTransactions(transactionsData.map(mapTransactionFromDB));
+      if (osData) setOrdensServico(osData.map(mapOrdemServicoFromDB));
     } catch (err: any) {
       console.error('Fetch Error:', err);
       setError(err.message || 'Ocorreu um erro ao carregar os dados.');
@@ -4515,16 +4516,16 @@ export default function App() {
     try {
       const payload = {
         ...clientData,
-        purchaseHistory: JSON.stringify(clientData.purchaseHistory || []),
+        purchaseHistory: clientData.purchaseHistory || [],
         totalSpent: 0,
         user_id: session.user.id
       };
       const { data, error } = await supabase
         .from('clients')
-        .insert([payload])
+        .insert([mapClientToDB(payload)])
         .select();
       if (error) throw error;
-      if (data) setClients(prev => [...prev, ...data]);
+      if (data) setClients(prev => [...prev, ...data.map(mapClientFromDB)]);
       showToast('Cliente adicionado com sucesso!');
     } catch (error: any) {
       console.error("Error adding client:", error);

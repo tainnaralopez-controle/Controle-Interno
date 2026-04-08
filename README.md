@@ -1,20 +1,24 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Technical Documentation
 
-# Run and deploy your AI Studio app
+## Architecture
+This is a React/TypeScript application using Vite, with a Supabase backend.
+- **Frontend:** React, Tailwind CSS, Recharts for visualization.
+- **Backend:** Supabase (PostgreSQL, Authentication, Realtime).
+- **State Management:** React hooks (`useState`, `useEffect`, `useMemo`).
+- **Refactoring:** Moving towards custom hooks for better separation of concerns.
 
-This contains everything you need to run your app locally.
+## Environment Variables
+Required variables (define in `.env`):
+- `VITE_SUPABASE_URL`: Supabase project URL.
+- `VITE_SUPABASE_ANON_KEY`: Supabase anon key.
 
-View your app in AI Studio: https://ai.studio/apps/f952bd87-b863-49ac-8834-6ac0e33877f8
+## Supabase Setup
+1. Create a project in the Supabase Dashboard.
+2. Enable Authentication (Google Login).
+3. Create tables: `clients`, `suppliers`, `products`, `orders`, `transactions`, `ordens_servico`.
+4. **Enable Row Level Security (RLS)** on all tables.
+5. Create policies to allow authenticated users to access their own data (e.g., `user_id = auth.uid()`).
 
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## API Endpoints
+- The app uses the Supabase JavaScript Client SDK directly to interact with the database.
+- No custom backend API endpoints are exposed; all database operations are handled via Supabase's secure client-side API.
