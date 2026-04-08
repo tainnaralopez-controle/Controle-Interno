@@ -32,6 +32,7 @@ import {
   History,
   Settings2,
   Edit3,
+  Pencil,
   FileText,
   BarChart3,
   ArrowUpDown,
@@ -3039,17 +3040,27 @@ const OrdersView = ({ products, clients, orders, setOrders, onAddOrder, onDelete
   );
 };
 
-const ClientForm = ({ onClose, onAddClient }: { onClose: () => void, onAddClient?: (client: any) => void }) => {
+const ClientForm = ({ 
+  onClose, 
+  onAddClient, 
+  onUpdateClient, 
+  editingClient 
+}: { 
+  onClose: () => void, 
+  onAddClient?: (data: any) => Promise<void>,
+  onUpdateClient?: (id: string, data: any) => Promise<void>,
+  editingClient?: Client | null
+}) => {
   const [formData, setFormData] = useState({
-    name: '',
-    whatsapp: '',
-    email: '',
-    birthday: '',
-    instagram: '',
-    tag: 'Ativo' as Client['tag'],
-    preferences: '',
-    notes: '',
-    avatar: ''
+    name: editingClient?.name || '',
+    whatsapp: editingClient?.whatsapp || '',
+    email: editingClient?.email || '',
+    birthday: editingClient?.birthday || '',
+    instagram: editingClient?.instagram || '',
+    tag: editingClient?.tag || 'Ativo' as Client['tag'],
+    preferences: editingClient?.preferences || '',
+    notes: editingClient?.notes || '',
+    avatar: editingClient?.avatar || ''
   });
 
   const [isFetching, setIsFetching] = useState(false);
@@ -3075,6 +3086,16 @@ const ClientForm = ({ onClose, onAddClient }: { onClose: () => void, onAddClient
     }
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingClient) {
+      onUpdateClient?.(editingClient.id, formData);
+    } else {
+      onAddClient?.(formData);
+    }
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <motion.div 
@@ -3084,13 +3105,13 @@ const ClientForm = ({ onClose, onAddClient }: { onClose: () => void, onAddClient
       >
         <div className="p-8">
           <div className="flex justify-between items-center mb-8">
-            <h3 className="text-2xl font-bold">Novo Cliente</h3>
+            <h3 className="text-2xl font-bold">{editingClient ? 'Editar Cliente' : 'Novo Cliente'}</h3>
             <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
               <X size={24} />
             </button>
           </div>
 
-          <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); onAddClient?.(formData); onClose(); }}>
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="flex flex-col items-center gap-4 mb-8">
               <div className="relative group">
                 <div className="w-24 h-24 bg-gray-100 rounded-3xl overflow-hidden border-2 border-dashed border-gray-200 flex items-center justify-center relative">
@@ -3222,7 +3243,7 @@ const ClientForm = ({ onClose, onAddClient }: { onClose: () => void, onAddClient
 
             <div className="pt-4 flex gap-4">
               <button type="button" onClick={onClose} className="flex-1 py-4 bg-gray-100 hover:bg-gray-200 rounded-2xl font-bold transition-all">Cancelar</button>
-              <button type="submit" className="flex-1 py-4 bg-black text-white rounded-2xl font-bold shadow-xl hover:bg-gray-800 transition-all">Cadastrar Cliente</button>
+              <button type="submit" className="flex-1 py-4 bg-black text-white rounded-2xl font-bold shadow-xl hover:bg-gray-800 transition-all">{editingClient ? 'Salvar Alterações' : 'Cadastrar Cliente'}</button>
             </div>
           </form>
         </div>
@@ -3412,6 +3433,7 @@ const CRMView = ({ clients, setClients, orders, ordensServico, onAddClient, onUp
 }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
 
   return (
     <div className="space-y-6">
@@ -3426,6 +3448,14 @@ const CRMView = ({ clients, setClients, orders, ordensServico, onAddClient, onUp
       </div>
 
       {isFormOpen && <ClientForm onClose={() => setIsFormOpen(false)} onAddClient={onAddClient} />}
+      
+      {editingClient && (
+        <ClientForm 
+          editingClient={editingClient}
+          onClose={() => setEditingClient(null)} 
+          onUpdateClient={onUpdateClient}
+        />
+      )}
       
       {selectedClient && (
         <ClientDetailsModal 
@@ -3458,6 +3488,13 @@ const CRMView = ({ clients, setClients, orders, ordensServico, onAddClient, onUp
                       className="p-2 text-gray-400 hover:text-red-500 transition-colors"
                     >
                       <Trash2 size={16} />
+                    </button>
+                    <button 
+                      onClick={() => { setEditingClient(client); setIsFormOpen(true); }}
+                      className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
+                      title="Editar"
+                    >
+                      <Pencil size={16} />
                     </button>
                     <span className={cn(
                       "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
@@ -3501,24 +3538,44 @@ const CRMView = ({ clients, setClients, orders, ordensServico, onAddClient, onUp
           );
         })}
       </div>
+      
     </div>
   );
 };
 
-const SupplierForm = ({ onClose, onAddSupplier }: { onClose: () => void, onAddSupplier?: (supplier: any) => void }) => {
+const SupplierForm = ({ 
+  onClose, 
+  onAddSupplier, 
+  onUpdateSupplier, 
+  editingSupplier 
+}: { 
+  onClose: () => void, 
+  onAddSupplier?: (data: any) => Promise<void>,
+  onUpdateSupplier?: (id: string, data: any) => Promise<void>,
+  editingSupplier?: Supplier | null
+}) => {
   const [formData, setFormData] = useState({
-    name: '',
-    contact: '',
-    whatsapp: '',
-    email: '',
-    material: '',
-    deliveryTime: 7,
-    googleMapsUrl: '',
-    minPurchase: 0,
-    paymentTerms: '',
-    notes: '',
-    qualityRating: 5
+    name: editingSupplier?.name || '',
+    contact: editingSupplier?.contact || '',
+    whatsapp: editingSupplier?.whatsapp || '',
+    material: editingSupplier?.material || '',
+    deliveryTime: editingSupplier?.deliveryTime || 7,
+    googleMapsUrl: editingSupplier?.googleMapsUrl || '',
+    minPurchase: editingSupplier?.minPurchase || 0,
+    paymentTerms: editingSupplier?.paymentTerms || '',
+    notes: editingSupplier?.notes || '',
+    qualityRating: editingSupplier?.qualityRating || 3
   });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingSupplier) {
+      onUpdateSupplier?.(editingSupplier.id, formData);
+    } else {
+      onAddSupplier?.(formData);
+    }
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -3529,13 +3586,13 @@ const SupplierForm = ({ onClose, onAddSupplier }: { onClose: () => void, onAddSu
       >
         <div className="p-8">
           <div className="flex justify-between items-center mb-8">
-            <h3 className="text-2xl font-bold">Novo Fornecedor</h3>
+            <h3 className="text-2xl font-bold">{editingSupplier ? 'Editar Fornecedor' : 'Novo Fornecedor'}</h3>
             <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
               <X size={24} />
             </button>
           </div>
 
-          <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); onAddSupplier?.(formData); onClose(); }}>
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-gray-500 uppercase">Nome ou Razão Social</label>
@@ -3567,16 +3624,6 @@ const SupplierForm = ({ onClose, onAddSupplier }: { onClose: () => void, onAddSu
                   value={formData.whatsapp}
                   onChange={e => setFormData(prev => ({ ...prev, whatsapp: e.target.value }))}
                   placeholder="(11) 99999-9999" 
-                  className="w-full bg-gray-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-black transition-all" 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase">E-mail de Contato</label>
-                <input 
-                  type="email" 
-                  value={formData.email}
-                  onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  placeholder="contato@fornecedor.com" 
                   className="w-full bg-gray-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-black transition-all" 
                 />
               </div>
@@ -3669,7 +3716,7 @@ const SupplierForm = ({ onClose, onAddSupplier }: { onClose: () => void, onAddSu
 
             <div className="pt-4 flex gap-4">
               <button type="button" onClick={onClose} className="flex-1 py-4 bg-gray-100 hover:bg-gray-200 rounded-2xl font-bold transition-all">Cancelar</button>
-              <button type="submit" className="flex-1 py-4 bg-black text-white rounded-2xl font-bold shadow-xl hover:bg-gray-800 transition-all">Cadastrar Fornecedor</button>
+              <button type="submit" className="flex-1 py-4 bg-black text-white rounded-2xl font-bold shadow-xl hover:bg-gray-800 transition-all">{editingSupplier ? 'Salvar Alterações' : 'Cadastrar Fornecedor'}</button>
             </div>
           </form>
         </div>
@@ -3686,6 +3733,7 @@ const SuppliersView = ({ suppliers, setSuppliers, onAddSupplier, onUpdateSupplie
   onDeleteSupplier: (id: string) => Promise<void>
 }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
 
   const getSupplierPerformance = (supplierName: string) => {
     // We'll use the products from props if available, but for now we'll use MOCK_PRODUCTS as fallback
@@ -3710,6 +3758,14 @@ const SuppliersView = ({ suppliers, setSuppliers, onAddSupplier, onUpdateSupplie
       </div>
 
       {isFormOpen && <SupplierForm onClose={() => setIsFormOpen(false)} onAddSupplier={onAddSupplier} />}
+      
+      {editingSupplier && (
+        <SupplierForm 
+          editingSupplier={editingSupplier}
+          onClose={() => setEditingSupplier(null)} 
+          onUpdateSupplier={onUpdateSupplier}
+        />
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {suppliers.map(supplier => {
@@ -3728,6 +3784,13 @@ const SuppliersView = ({ suppliers, setSuppliers, onAddSupplier, onUpdateSupplie
                     className="p-2 text-gray-400 hover:text-red-500 transition-colors"
                   >
                     <Trash2 size={16} />
+                  </button>
+                  <button 
+                    onClick={() => { setEditingSupplier(supplier); setIsFormOpen(true); }}
+                    className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
+                    title="Editar"
+                  >
+                    <Pencil size={16} />
                   </button>
                   <div className="flex items-center gap-1 bg-amber-50 text-amber-600 px-2 py-1 rounded-lg text-[10px] font-bold">
                     ★ {supplier.qualityRating}.0
@@ -4450,31 +4513,45 @@ export default function App() {
   const handleAddClient = async (clientData: any) => {
     if (!session?.user) return;
     try {
+      const payload = {
+        ...clientData,
+        purchaseHistory: JSON.stringify(clientData.purchaseHistory || []),
+        totalSpent: 0,
+        user_id: session.user.id
+      };
       const { data, error } = await supabase
         .from('clients')
-        .insert([{ ...clientData, purchaseHistory: [], totalSpent: 0, user_id: session.user.id }])
+        .insert([payload])
         .select();
-      
       if (error) throw error;
       if (data) setClients(prev => [...prev, ...data]);
-    } catch (error) {
+      showToast('Cliente adicionado com sucesso!');
+    } catch (error: any) {
       console.error("Error adding client:", error);
+      showToast('Erro ao salvar cliente: ' + (error.message || 'Tente novamente'), 'error');
     }
   };
 
   const handleUpdateClient = async (clientId: string, clientData: Partial<Client>) => {
     if (!session?.user) return;
     try {
+      const payload = {
+        ...clientData,
+        ...(clientData.purchaseHistory && {
+          purchaseHistory: JSON.stringify(clientData.purchaseHistory)
+        })
+      };
       const { error } = await supabase
         .from('clients')
-        .update(clientData)
+        .update(payload)
         .eq('id', clientId)
         .eq('user_id', session.user.id);
-      
       if (error) throw error;
       setClients(prev => prev.map(c => c.id === clientId ? { ...c, ...clientData } : c));
-    } catch (error) {
+      showToast('Cliente atualizado com sucesso!');
+    } catch (error: any) {
       console.error("Error updating client:", error);
+      showToast('Erro ao atualizar cliente: ' + (error.message || ''), 'error');
     }
   };
 
@@ -4507,14 +4584,16 @@ export default function App() {
   const handleAddSupplier = async (supplierData: any) => {
     if (!session?.user) return;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('suppliers')
-        .insert([{ ...supplierData, user_id: session.user.id }]);
+        .insert([{ ...supplierData, user_id: session.user.id }])
+        .select();
       if (error) throw error;
-      showToast('Fornecedor adicionado com sucesso');
-    } catch (error) {
+      if (data) setSuppliers(prev => [...prev, ...data]);
+      showToast('Fornecedor adicionado com sucesso!');
+    } catch (error: any) {
       console.error("Error adding supplier:", error);
-      showToast('Erro ao adicionar fornecedor', 'error');
+      showToast('Erro ao salvar fornecedor: ' + (error.message || ''), 'error');
     }
   };
 
@@ -4524,12 +4603,14 @@ export default function App() {
       const { error } = await supabase
         .from('suppliers')
         .update(supplierData)
-        .eq('id', supplierId);
+        .eq('id', supplierId)
+        .eq('user_id', session.user.id);
       if (error) throw error;
-      showToast('Fornecedor atualizado com sucesso');
-    } catch (error) {
+      setSuppliers(prev => prev.map(s => s.id === supplierId ? { ...s, ...supplierData } : s));
+      showToast('Fornecedor atualizado com sucesso!');
+    } catch (error: any) {
       console.error("Error updating supplier:", error);
-      showToast('Erro ao atualizar fornecedor', 'error');
+      showToast('Erro ao atualizar fornecedor: ' + (error.message || ''), 'error');
     }
   };
 

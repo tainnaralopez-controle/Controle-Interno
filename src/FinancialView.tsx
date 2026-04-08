@@ -123,21 +123,24 @@ export const FinancialView = ({
   }, [transactions, automaticTransactions]);
 
   const handleAddTransaction = async (txData: any) => {
+    console.log('Saving transaction:', txData);
     try {
+      const { isAutomatic, ...rest } = txData;
+      const payload = {
+        ...rest,
+        is_automatic: isAutomatic || false,
+        user_id: user.id
+      };
       if (editingTx) {
         const { error } = await supabase
           .from('transactions')
-          .update(txData)
+          .update(payload)
           .eq('id', editingTx.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('transactions')
-          .insert([{
-            ...txData,
-            user_id: user.id,
-            is_automatic: false
-          }]);
+          .insert([payload]);
         if (error) throw error;
       }
       setIsModalOpen(false);
