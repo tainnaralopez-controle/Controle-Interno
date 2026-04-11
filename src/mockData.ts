@@ -58,6 +58,7 @@ export const MOCK_SUPPLIERS: Supplier[] = [
     paymentTerms: '30/60 dias',
     qualityRating: 5,
     notes: 'Melhor polimento do mercado',
+    websites: []
   },
   {
     id: 's2',
@@ -71,6 +72,7 @@ export const MOCK_SUPPLIERS: Supplier[] = [
     paymentTerms: 'À vista 10% desc',
     qualityRating: 4,
     notes: 'Atrasou o último pedido em 2 dias',
+    websites: []
   }
 ];
 

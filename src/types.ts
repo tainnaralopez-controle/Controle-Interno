@@ -29,6 +29,7 @@ export interface Supplier {
   qualityRating: number; // 1-5
   notes: string;
   googleMapsUrl?: string;
+  websites: { link: string; category: string }[];
   minPurchase?: number;
 }
 
@@ -94,6 +95,8 @@ export interface Product {
   expiryDate?: string;
   stockEvolution?: { date: string; stock: number }[];
   psychologicalPrice?: number;
+  size?: string;
+  color?: string;
 }
 
 export interface Order {

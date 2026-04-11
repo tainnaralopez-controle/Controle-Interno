@@ -60,7 +60,10 @@ import { FinancialView } from './FinancialView';
 import { OrdemServicoView } from './components/OrdemServicoView';
 import { formatCurrency, formatPercent, cn } from './lib/utils';
 import { OrderStatus, Client, Order, Product, Supplier, Transaction, OrdemServico } from './types';
-import { mapClientFromDB, mapSupplierFromDB, mapProductFromDB, mapOrderFromDB, mapTransactionFromDB, mapOrdemServicoFromDB } from './lib/mappers';
+import { 
+  mapClientFromDB, mapSupplierFromDB, mapProductFromDB, mapOrderFromDB, mapTransactionFromDB, mapOrdemServicoFromDB,
+  mapClientToDB, mapSupplierToDB, mapProductToDB, mapOrderToDB, mapTransactionToDB, mapOrdemServicoToDB
+} from './lib/mappers';
 import { supabase } from './lib/supabase';
 import { LoginScreen } from './components/LoginScreen';
 import { AdminView } from './components/AdminView';
@@ -1610,10 +1613,19 @@ const LabelModal = ({ isOpen, onClose, initialProducts }: { isOpen: boolean, onC
   );
 };
 
-const PricingView = ({ products, setProducts, onUpdateProduct }: { 
+const PricingView = ({ products, setProducts, onUpdateProduct, onDeleteProduct, categories, isEditingCategories, setIsEditingCategories, newCategory, setNewCategory, addCategory, removeCategory, suppliers }: { 
   products: any[], 
   setProducts: React.Dispatch<React.SetStateAction<any[]>>,
-  onUpdateProduct: (id: string, data: Partial<Product>) => Promise<void>
+  onUpdateProduct: (id: string, data: Partial<Product>) => Promise<void>,
+  onDeleteProduct: (id: string) => Promise<void>,
+  categories: string[],
+  isEditingCategories: boolean,
+  setIsEditingCategories: React.Dispatch<React.SetStateAction<boolean>>,
+  newCategory: string,
+  setNewCategory: React.Dispatch<React.SetStateAction<string>>,
+  addCategory: () => void,
+  removeCategory: (cat: string) => void,
+  suppliers: any[]
 }) => {
   const [activePricingTab, setActivePricingTab] = useState<'simulator' | 'table'>('table');
   const [showProductForm, setShowProductForm] = useState(false);
@@ -1645,7 +1657,9 @@ const PricingView = ({ products, setProducts, onUpdateProduct }: {
     site: 2.50,
     coupon: 5.00,
     psychologicalPrice: 0,
-    status: 'Venda Ativa'
+    status: 'Venda Ativa',
+    size: '',
+    color: ''
   });
 
   const [calc, setCalc] = useState({
@@ -1697,10 +1711,7 @@ const PricingView = ({ products, setProducts, onUpdateProduct }: {
     }
   };
 
-  const [scenarios, setScenarios] = useState([
-    { name: 'Atual', price: 124.30, margin: 120 },
-    { name: 'Promoção', price: 101.70, margin: 80 },
-  ]);
+  const [scenarios, setScenarios] = useState<{ name: string, price: number, margin: number }[]>([]);
 
   const baseCost = calc.cost + calc.tag + calc.plastic + calc.gift + calc.cert + calc.box + calc.shipping;
   const variableCosts = 0; // Handled in baseCost now
@@ -1871,7 +1882,8 @@ const PricingView = ({ products, setProducts, onUpdateProduct }: {
                     <th className="px-4 py-3 text-[10px] uppercase font-bold border-r border-white/10">Categoria</th>
                     <th className="px-4 py-3 text-[10px] uppercase font-bold border-r border-white/10">Estoque</th>
                     <th className="px-4 py-3 text-[10px] uppercase font-bold border-r border-white/10">Preço Psicológico</th>
-                    <th className="px-4 py-3 text-[10px] uppercase font-bold">Preço Revenda</th>
+                    <th className="px-4 py-3 text-[10px] uppercase font-bold border-r border-white/10">Preço Revenda</th>
+                    <th className="px-4 py-3 text-[10px] uppercase font-bold">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -1937,6 +1949,14 @@ const PricingView = ({ products, setProducts, onUpdateProduct }: {
                           <td className="px-4 py-4 font-bold">{p.stock}</td>
                           <td className="px-4 py-4 font-bold text-blue-600">{formatCurrency(p.psychologicalPrice || 0)}</td>
                           <td className="px-4 py-4 bg-green-50 font-black text-green-700">{formatCurrency(resalePrice)}</td>
+                          <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                            <button 
+                              onClick={() => onDeleteProduct(p.id)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -2157,7 +2177,9 @@ const PricingView = ({ products, setProducts, onUpdateProduct }: {
                 cost: 0, tag: calc.tag, plastic: calc.plastic, gift: calc.gift, cert: calc.cert, box: calc.box, shipping: calc.shipping,
                 profitPercent: calc.profitPercent, mercadoPago: calc.mercadoPago, site: calc.site, coupon: calc.coupon,
                 psychologicalPrice: 0,
-                status: 'Venda Ativa'
+                status: 'Venda Ativa',
+                size: '',
+                color: ''
               });
             }}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2193,13 +2215,43 @@ const PricingView = ({ products, setProducts, onUpdateProduct }: {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-500 uppercase">Categoria</label>
-                  <input 
-                    type="text" 
-                    value={newProduct.category}
-                    onChange={e => setNewProduct({...newProduct, category: e.target.value})}
-                    className="w-full bg-gray-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-black transition-all" 
-                  />
+                  <label className="text-xs font-bold text-gray-500 uppercase flex justify-between">
+                    Categoria
+                    <button type="button" onClick={() => setIsEditingCategories(!isEditingCategories)} className="text-blue-600 hover:text-blue-800">
+                      {isEditingCategories ? 'Concluir' : 'Editar'}
+                    </button>
+                  </label>
+                  {isEditingCategories ? (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          value={newCategory}
+                          onChange={e => setNewCategory(e.target.value)}
+                          placeholder="Nova categoria"
+                          className="flex-1 bg-gray-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-black transition-all"
+                        />
+                        <button type="button" onClick={addCategory} className="p-4 bg-black text-white rounded-xl"><Plus size={20} /></button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {categories.map(cat => (
+                          <span key={cat} className="px-3 py-1 bg-gray-200 rounded-full text-sm flex items-center gap-2">
+                            {cat}
+                            <button type="button" onClick={() => removeCategory(cat)} className="text-red-500"><X size={14} /></button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <select 
+                      value={newProduct.category}
+                      onChange={e => setNewProduct({...newProduct, category: e.target.value})}
+                      className="w-full bg-gray-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-black transition-all"
+                    >
+                      <option value="">Selecione uma categoria</option>
+                      {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-gray-500 uppercase">Estoque Inicial</label>
@@ -2211,13 +2263,35 @@ const PricingView = ({ products, setProducts, onUpdateProduct }: {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-500 uppercase">Fornecedor</label>
+                  <label className="text-xs font-bold text-gray-500 uppercase">Tamanho</label>
                   <input 
                     type="text" 
-                    value={newProduct.supplier}
-                    onChange={e => setNewProduct({...newProduct, supplier: e.target.value})}
+                    value={newProduct.size || ''}
+                    onChange={e => setNewProduct({...newProduct, size: e.target.value})}
+                    placeholder="Ex: P, M, G, 40"
                     className="w-full bg-gray-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-black transition-all" 
                   />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase">Cor</label>
+                  <input 
+                    type="text" 
+                    value={newProduct.color || ''}
+                    onChange={e => setNewProduct({...newProduct, color: e.target.value})}
+                    placeholder="Ex: Azul, Branco"
+                    className="w-full bg-gray-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-black transition-all" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase">Fornecedor</label>
+                  <select 
+                    value={newProduct.supplier}
+                    onChange={e => setNewProduct({...newProduct, supplier: e.target.value})}
+                    className="w-full bg-gray-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-black transition-all"
+                  >
+                    <option value="">Selecione um fornecedor</option>
+                    {suppliers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
                 </div>
               </div>
 
@@ -3565,8 +3639,24 @@ const SupplierForm = ({
     minPurchase: editingSupplier?.minPurchase || 0,
     paymentTerms: editingSupplier?.paymentTerms || '',
     notes: editingSupplier?.notes || '',
-    qualityRating: editingSupplier?.qualityRating || 3
+    qualityRating: editingSupplier?.qualityRating || 3,
+    websites: editingSupplier?.websites || []
   });
+
+  const addWebsite = () => {
+    setFormData(prev => ({ ...prev, websites: [...prev.websites, { link: '', category: '' }] }));
+  };
+
+  const removeWebsite = (index: number) => {
+    setFormData(prev => ({ ...prev, websites: prev.websites.filter((_, i) => i !== index) }));
+  };
+
+  const updateWebsite = (index: number, field: 'link' | 'category', value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      websites: prev.websites.map((w, i) => i === index ? { ...w, [field]: value } : w)
+    }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -3651,6 +3741,36 @@ const SupplierForm = ({
                   className="w-full bg-gray-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-black transition-all" 
                 />
               </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-bold text-gray-500 uppercase">Websites</label>
+                <button type="button" onClick={addWebsite} className="text-blue-600 flex items-center gap-2 font-bold text-sm hover:text-blue-800 transition-colors">
+                  <Plus size={16} /> Adicionar
+                </button>
+              </div>
+              {formData.websites.map((website, index) => (
+                <div key={index} className="flex gap-4 items-center bg-gray-50 p-4 rounded-xl">
+                  <input 
+                    type="url" 
+                    value={website.link}
+                    onChange={e => updateWebsite(index, 'link', e.target.value)}
+                    placeholder="Link (URL)" 
+                    className="flex-1 bg-white border-none rounded-lg p-3 focus:ring-2 focus:ring-black transition-all" 
+                  />
+                  <input 
+                    type="text" 
+                    value={website.category}
+                    onChange={e => updateWebsite(index, 'category', e.target.value)}
+                    placeholder="Categoria" 
+                    className="w-1/3 bg-white border-none rounded-lg p-3 focus:ring-2 focus:ring-black transition-all" 
+                  />
+                  <button type="button" onClick={() => removeWebsite(index)} className="text-red-500 hover:text-red-700 p-2">
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              ))}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -4252,6 +4372,20 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [categories, setCategories] = useState<string[]>(['Anéis', 'Brincos', 'Colares', 'Pulseiras']);
+  const [isEditingCategories, setIsEditingCategories] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
+
+  const addCategory = () => {
+    if (newCategory && !categories.includes(newCategory)) {
+      setCategories(prev => [...prev, newCategory]);
+      setNewCategory('');
+    }
+  };
+
+  const removeCategory = (cat: string) => {
+    setCategories(prev => prev.filter(c => c !== cat));
+  };
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [clients, setClients] = useState<Client[]>([]);
@@ -4458,22 +4592,27 @@ export default function App() {
     try {
       const { data: newOrder, error } = await supabase
         .from('orders')
-        .insert([{ ...order, user_id: session.user.id }])
+        .insert([mapOrderToDB({ ...order, user_id: session.user.id })])
         .select()
         .single();
 
       if (error) throw error;
+      
+      if (newOrder) {
+        setOrders(prev => [newOrder, ...prev]);
+        showToast('Pedido adicionado com sucesso!');
+      }
       
       // Interlink with clients
       const client = clients.find(c => c.id === order.clientId);
       if (client) {
         await supabase
           .from('clients')
-          .update({
+          .update(mapClientToDB({
             purchaseHistory: [...(client.purchaseHistory || []), newOrder.id],
             totalSpent: (client.totalSpent || 0) + order.totalValue,
             lastPurchaseDate: order.createdAt
-          })
+          }))
           .eq('id', order.clientId);
       }
 
@@ -4487,7 +4626,7 @@ export default function App() {
           
           await supabase
             .from('products')
-            .update({
+            .update(mapProductToDB({
               stock: newStock,
               reserved: newReserved,
               salesCount: newSalesCount,
@@ -4502,12 +4641,13 @@ export default function App() {
                   note: `Pedido ${order.id} - Status: ${order.status}`
                 }
               ]
-            })
+            }))
             .eq('id', order.productId);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding order:", error);
+      showToast('Erro ao salvar pedido: ' + (error.message || ''), 'error');
     }
   };
 
@@ -4536,12 +4676,12 @@ export default function App() {
   const handleUpdateClient = async (clientId: string, clientData: Partial<Client>) => {
     if (!session?.user) return;
     try {
-      const payload = {
+      const payload = mapClientToDB({
         ...clientData,
         ...(clientData.purchaseHistory && {
           purchaseHistory: JSON.stringify(clientData.purchaseHistory)
         })
-      };
+      });
       const { error } = await supabase
         .from('clients')
         .update(payload)
@@ -4644,10 +4784,13 @@ export default function App() {
   const handleAddProduct = async (productData: any) => {
     if (!session?.user) return;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('products')
-        .insert([{ ...productData, user_id: session.user.id }]);
+        .insert([mapProductToDB({ ...productData, user_id: session.user.id })])
+        .select()
+        .single();
       if (error) throw error;
+      setProducts(prev => [mapProductFromDB(data), ...prev]);
       showToast('Produto adicionado com sucesso');
     } catch (error) {
       console.error("Error adding product:", error);
@@ -4658,11 +4801,15 @@ export default function App() {
   const handleUpdateProduct = async (productId: string, productData: Partial<Product>) => {
     if (!session?.user) return;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('products')
-        .update(productData)
-        .eq('id', productId);
+        .update(mapProductToDB(productData))
+        .eq('id', productId)
+        .eq('user_id', session.user.id)
+        .select()
+        .single();
       if (error) throw error;
+      setProducts(prev => prev.map(p => p.id === productId ? mapProductFromDB(data) : p));
       showToast('Produto atualizado com sucesso');
     } catch (error) {
       console.error("Error updating product:", error);
@@ -4671,12 +4818,23 @@ export default function App() {
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    if (!session?.user) return;
+    console.log("--- DEBUG: handleDeleteProduct called ---");
+    console.log("Product ID:", productId);
+    console.log("Session:", session);
+    console.log("Session User:", session?.user);
+    console.log("Session User ID:", session?.user?.id);
+    
+    if (!session?.user) {
+      console.log("No session user, aborting.");
+      showToast('Usuário não autenticado', 'error');
+      return;
+    }
     setConfirmModal({
       isOpen: true,
       title: 'Excluir Produto',
       message: 'Tem certeza que deseja excluir este produto?',
       onConfirm: async () => {
+        console.log("Confirming deletion for ID:", productId);
         try {
           const { error } = await supabase
             .from('products')
@@ -4684,8 +4842,16 @@ export default function App() {
             .eq('id', productId)
             .eq('user_id', session.user.id);
           
-          if (error) throw error;
-          setProducts(prev => prev.filter(p => p.id !== productId));
+          if (error) {
+            console.error("Supabase error:", error);
+            throw error;
+          }
+          console.log("Deletion successful in Supabase");
+          setProducts(prev => {
+            const newProducts = prev.filter(p => p.id !== productId);
+            console.log("New products count:", newProducts.length);
+            return newProducts;
+          });
           showToast('Produto excluído com sucesso');
         } catch (error) {
           console.error("Error deleting product:", error);
@@ -4725,10 +4891,13 @@ export default function App() {
   const handleAddOS = async (osData: any) => {
     if (!session?.user) return;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('ordens_servico')
-        .insert([{ ...osData, user_id: session.user.id }]);
+        .insert([mapOrdemServicoToDB({ ...osData, user_id: session.user.id })])
+        .select()
+        .single();
       if (error) throw error;
+      setOrdensServico(prev => [mapOrdemServicoFromDB(data), ...prev]);
       showToast('Ordem de Serviço aberta com sucesso');
     } catch (error) {
       console.error("Error adding OS:", error);
@@ -4739,11 +4908,15 @@ export default function App() {
   const handleUpdateOS = async (osId: string, osData: any) => {
     if (!session?.user) return;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('ordens_servico')
-        .update(osData)
-        .eq('id', osId);
+        .update(mapOrdemServicoToDB(osData))
+        .eq('id', osId)
+        .eq('user_id', session.user.id)
+        .select()
+        .single();
       if (error) throw error;
+      setOrdensServico(prev => prev.map(os => os.id === osId ? mapOrdemServicoFromDB(data) : os));
       showToast('Ordem de Serviço atualizada');
     } catch (error) {
       console.error("Error updating OS:", error);
@@ -4792,11 +4965,11 @@ export default function App() {
   const renderContent = () => {
     switch(activeTab) {
       case 'dashboard': return <DashboardView products={products} transactions={transactions} clients={clients} alerts={alerts} />;
-      case 'pricing': return <PricingView products={products} setProducts={setProducts} onUpdateProduct={handleUpdateProduct} />;
+      case 'pricing': return <PricingView products={products} setProducts={setProducts} onUpdateProduct={handleUpdateProduct} onDeleteProduct={handleDeleteProduct} categories={categories} isEditingCategories={isEditingCategories} setIsEditingCategories={setIsEditingCategories} newCategory={newCategory} setNewCategory={setNewCategory} addCategory={addCategory} removeCategory={removeCategory} suppliers={suppliers} />;
       case 'orders': return <OrdersView products={products} clients={clients} orders={orders} setOrders={setOrders} onAddOrder={handleAddOrder} onDeleteOrder={handleDeleteOrder} />;
       case 'crm': return <CRMView clients={clients} setClients={setClients} orders={orders} ordensServico={ordensServico} onAddClient={handleAddClient} onUpdateClient={handleUpdateClient} onDeleteClient={handleDeleteClient} />;
       case 'suppliers': return <SuppliersView suppliers={suppliers} setSuppliers={setSuppliers} onAddSupplier={handleAddSupplier} onUpdateSupplier={handleUpdateSupplier} onDeleteSupplier={handleDeleteSupplier} />;
-      case 'financial': return <FinancialView products={products} orders={orders} clients={clients} suppliers={suppliers} transactions={transactions} ordensServico={ordensServico} user={session.user} />;
+      case 'financial': return <FinancialView products={products} orders={orders} clients={clients} suppliers={suppliers} transactions={transactions} setTransactions={setTransactions} ordensServico={ordensServico} user={session.user} />;
       case 'os': return <OrdemServicoView ordensServico={ordensServico} orders={orders} clients={clients} onAddOS={handleAddOS} onUpdateOS={handleUpdateOS} onDeleteOS={handleDeleteOS} />;
       case 'ai': return <AIAssistantView />;
       case 'calendar': return <CalendarView />;

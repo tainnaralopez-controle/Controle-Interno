@@ -13,12 +13,15 @@ CREATE TABLE IF NOT EXISTS access_requests (
 ALTER TABLE access_requests ENABLE ROW LEVEL SECURITY;
 
 -- 3. Policies for access_requests
+DROP POLICY IF EXISTS "Anyone can request access" ON access_requests;
 CREATE POLICY "Anyone can request access" ON access_requests
   FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Admins can view all requests" ON access_requests;
 CREATE POLICY "Admins can view all requests" ON access_requests
   FOR SELECT USING (auth.jwt() ->> 'email' = 'tainnaralopez@gmail.com');
 
+DROP POLICY IF EXISTS "Admins can update requests" ON access_requests;
 CREATE POLICY "Admins can update requests" ON access_requests
   FOR UPDATE USING (auth.jwt() ->> 'email' = 'tainnaralopez@gmail.com');
 
@@ -57,6 +60,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
   quality_rating INTEGER NOT NULL DEFAULT 3,
   notes TEXT NOT NULL,
   google_maps_url TEXT,
+  websites JSONB DEFAULT '[]'::jsonb,
   min_purchase DECIMAL(10,2) DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
@@ -185,9 +189,20 @@ ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ordens_servico ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for user-owned data
+DROP POLICY IF EXISTS "Users can only access their own clients" ON clients;
 CREATE POLICY "Users can only access their own clients" ON clients FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can only access their own suppliers" ON suppliers;
 CREATE POLICY "Users can only access their own suppliers" ON suppliers FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can only access their own products" ON products;
 CREATE POLICY "Users can only access their own products" ON products FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can only access their own orders" ON orders;
 CREATE POLICY "Users can only access their own orders" ON orders FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can only access their own transactions" ON transactions;
 CREATE POLICY "Users can only access their own transactions" ON transactions FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can only access their own ordens_servico" ON ordens_servico;
 CREATE POLICY "Users can only access their own ordens_servico" ON ordens_servico FOR ALL USING (auth.uid() = user_id);

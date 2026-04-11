@@ -49,13 +49,14 @@ const TABS = [
 ] as const;
 
 export const FinancialView = ({
-  products, orders, clients, suppliers, transactions, ordensServico, user
+  products, orders, clients, suppliers, transactions, setTransactions, ordensServico, user
 }: {
   products: Product[];
   orders: Order[];
   clients: Client[];
   suppliers: Supplier[];
   transactions: Transaction[];
+  setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
   ordensServico: OrdemServico[];
   user: User;
 }) => {
@@ -132,16 +133,23 @@ export const FinancialView = ({
         user_id: user.id
       };
       if (editingTx) {
-        const { error } = await supabase
+        const { error, data } = await supabase
           .from('transactions')
           .update(payload)
-          .eq('id', editingTx.id);
+          .eq('id', editingTx.id)
+          .eq('user_id', user.id)
+          .select()
+          .single();
         if (error) throw error;
+        setTransactions(prev => prev.map(t => t.id === editingTx.id ? data : t));
       } else {
-        const { error } = await supabase
+        const { error, data } = await supabase
           .from('transactions')
-          .insert([payload]);
+          .insert([payload])
+          .select()
+          .single();
         if (error) throw error;
+        setTransactions(prev => [data, ...prev]);
       }
       setIsModalOpen(false);
       setEditingTx(null);
@@ -155,8 +163,10 @@ export const FinancialView = ({
       const { error } = await supabase
         .from('transactions')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
       if (error) throw error;
+      setTransactions(prev => prev.filter(t => t.id !== id));
     } catch (error) {
       console.error('Error deleting transaction:', error);
     }
